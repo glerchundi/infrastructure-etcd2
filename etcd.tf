@@ -99,7 +99,7 @@ resource "google_compute_instance" "etcd-nodes" {
 
     depends_on = [
         "google_compute_disk.etcd-pds",
-        "google_compute_target_pool.etcd-pool"
+        # "google_compute_target_pool.etcd-pool"
     ]
 }
 
