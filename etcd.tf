@@ -51,9 +51,9 @@ resource "template_file" "etcd-userdata" {
         # files
         #
 
-        ca-chain-cert    = "${base64enc(file(format("%s/%s", path.module, "files/ca-chain.cert.pem")))}"
-        etcd-server-key  = "${base64enc(file(format("%s/%s", path.module, "files/etcd-server.key.pem")))}"
-        etcd-server-cert = "${base64enc(file(format("%s/%s", path.module, "files/etcd-server.cert.pem")))}"
+        ca-chain-cert    = "${base64enc(file("files/ca-chain.cert.pem"))}"
+        etcd-server-key  = "${base64enc(file("files/etcd-server.key.pem"))}"
+        etcd-server-cert = "${base64enc(file("files/etcd-server.cert.pem"))}"
     }
 }
 
