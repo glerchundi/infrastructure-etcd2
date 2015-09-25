@@ -58,8 +58,8 @@ resource "template_file" "etcd-userdata" {
         #
 
         ca-chain-cert    = "${base64enc(file(var.file-ca-chain-cert))}"
-        etcd-server-key  = "${base64enc(file(var.file-etcd-server-key"))}"
-        etcd-server-cert = "${base64enc(file(var.file-etcd-server-cert"))}"
+        etcd-server-key  = "${base64enc(file(var.file-etcd-server-key))}"
+        etcd-server-cert = "${base64enc(file(var.file-etcd-server-cert))}"
     }
 }
 
