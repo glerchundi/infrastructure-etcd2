@@ -1,0 +1,130 @@
+#cloud-config
+
+coreos:
+
+  update:
+    group: stable
+    reboot-strategy: off
+
+  etcd2:
+    data-dir: /var/lib/etcd2
+    advertise-client-urls: https://${private_ipv4}:2379
+    initial-advertise-peer-urls: http://${private_ipv4}:2380
+    listen-client-urls: https://0.0.0.0:2379
+    listen-peer-urls: http://${private_ipv4}:2380
+    client-cert-auth: true,
+    trusted-ca-file: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
+    key-file: "/etc/ssl/etcd/private/etcd-server.key.pem"
+    cert-file: "/etc/ssl/etcd/certs/etcd-server.cert.pem"
+
+  units:
+    - name: 00-ens4v1.network
+      runtime: true
+      content: |
+        [Match]
+        Name=ens4v1
+
+        [Network]
+        Address=${private_ipv4}/32
+        Gateway=10.0.0.1
+        DNS=8.8.8.8
+        DNS=8.8.4.4
+
+    - name: etcd2-data-dir-format.service
+      command: start
+      content: |
+        [Unit]
+        Requires=dev-sdb.device
+        After=dev-sdb.device
+        ConditionPathExists=!/var/lib/format-done
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/bin/bash -c " \
+                    if [[ -z `blkid -t TYPE=ext4 | grep /dev/sdb` ]]; then \
+                      /usr/sbin/mkfs.ext4 /dev/sdb; \
+                    fi; \
+                  "
+        ExecStartPost=/usr/bin/touch /var/lib/format-done
+
+    - name: etcd2-data-dir-mount.service
+      command: start
+      content: |
+        [Unit]
+        DefaultDependencies=no
+        Requires=media.mount etcd2-data-dir-format.service 
+        After=media.mount etcd2-data-dir-format.service
+        Conflicts=umount.target
+        ConditionPathIsMountPoint=!/var/lib/etcd2
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/bin/mkdir -p /var/lib/etcd2
+        ExecStart=/bin/mount /dev/sdb /var/lib/etcd2
+        ExecStart=/bin/chown etcd:etcd -R /var/lib/etcd2
+
+    # install-etcd2-bootstrapper.service ensures the etcd2-bootstrapper binary is installed.
+    - name: install-etcd2-bootstrapper.service
+      command: start
+      content: |
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        Environment=VERSION=0.1.4
+        ExecStart=/usr/bin/mkdir -p /opt/bin
+        ExecStart=/usr/bin/curl --fail -L \
+        -o /opt/bin/etcd2-bootstrapper -z /opt/bin/etcd2-bootstrapper \
+        https://github.com/glerchundi/etcd2-bootstrapper/releases/download/v$${VERSION}/etcd2-bootstrapper-linux-amd64
+        ExecStart=/usr/bin/chmod 0755 /opt/bin/etcd2-bootstrapper
+
+    # etcd2-bootstrapper bootstraps etcd cluster. Syncs etcd peers, adds this and removes no
+    # longer available ones as well as outputting those peers to a file.
+    - name: etcd2-bootstrapper.service
+      command: start
+      content: |
+        [Unit]
+        Requires=install-etcd2-bootstrapper.service
+        After=install-etcd2-bootstrapper.service
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/opt/bin/etcd2-bootstrapper \
+        --me ${me} \
+        --members ${members} \
+        --force \
+        --out /etc/etcd2-initial-cluster.env
+
+    # etcd2.service is needed to create another dependency with cluster configurer
+    - name: etcd2.service
+      command: start
+      drop-ins:
+        - name: 99-etcd2-initial-cluster.conf
+          content: |
+            [Unit]
+            Requires=etcd2-bootstrapper.service etcd2-data-dir-mount.service
+            After=etcd2-bootstrapper.service etcd2-data-dir-mount.service
+            [Service]
+            EnvironmentFile=/etc/etcd2-initial-cluster.env
+
+    - name: fleet.service
+      command: start
+
+write_files:
+  - path: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
+    permissions: "0600"
+    owner: "etcd"
+    encoding: "base64"
+    content: |
+      ${ca-chain-cert}
+  - path: "/etc/ssl/etcd/certs/etcd-server.cert.pem"
+    permissions: "0600"
+    owner: "etcd"
+    encoding: "base64"
+    content: |
+      ${etcd-server-cert}
+  - path: "/etc/ssl/etcd/private/etcd-server.key.pem"
+    permissions: "0600"
+    owner: "etcd"
+    encoding: "base64"
+    content: |
+      ${etcd-server-key}
