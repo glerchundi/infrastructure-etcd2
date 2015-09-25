@@ -1,3 +1,9 @@
+provider "google" {
+    account_file = "${file("${var.file-account}")}"
+    project      = "${var.project}"
+    region       = "${var.region}"
+}
+
 resource "google_compute_network" "etcd-network" {
     name       = "${var.etcd-network-name}"
     ipv4_range = "${var.etcd-network-ipv4-range}"
@@ -51,9 +57,9 @@ resource "template_file" "etcd-userdata" {
         # files
         #
 
-        ca-chain-cert    = "${base64enc(file("files/ca-chain.cert.pem"))}"
-        etcd-server-key  = "${base64enc(file("files/etcd-server.key.pem"))}"
-        etcd-server-cert = "${base64enc(file("files/etcd-server.cert.pem"))}"
+        ca-chain-cert    = "${base64enc(file(var.file-ca-chain-cert))}"
+        etcd-server-key  = "${base64enc(file(var.file-etcd-server-key"))}"
+        etcd-server-cert = "${base64enc(file(var.file-etcd-server-cert"))}"
     }
 }
 
@@ -94,7 +100,7 @@ resource "google_compute_instance" "etcd-nodes" {
 
     metadata {
         user-data = "${element(template_file.etcd-userdata.*.rendered, count.index)}"
-        sshKeys   = "${file(var.etcd-ssh-pub-key)}"
+        sshKeys   = "${file(var.file-etcd-ssh-pub-key)}"
     }
 
     depends_on = [

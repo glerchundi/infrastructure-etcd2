@@ -1,5 +1,30 @@
-variable "account_file" {}
+
 variable "project" {}
+
+#
+# files
+#
+
+variable "file-account" {
+}
+
+variable "file-ca-chain-cert" {
+    default = "files/ca-chain.cert.pem"
+}
+
+variable "file-etcd-server-key" {
+    default = "files/etcd-server.key.pem"
+}
+
+variable "file-etcd-server-cert" {
+    default = "files/etcd-server.cert.pem"
+}
+
+variable "file-etcd-ssh-pub-key" {
+    default = "files/id_rsa.pub"
+}
+
+# infrastructure
 
 variable "region" {
     default = "us-central1"
@@ -31,10 +56,6 @@ variable "etcd-node-zones" {
         "1" = "us-central1-b"
         "2" = "us-central1-c"
     }
-}
-
-variable "etcd-ssh-pub-key" {
-    default = "id_rsa.pub"
 }
 
 variable "machine_type" {
