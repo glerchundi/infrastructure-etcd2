@@ -1,2 +1,4 @@
+files/*
+!files/etcd.yml
 *.pem
 *.pub

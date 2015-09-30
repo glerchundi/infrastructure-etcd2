@@ -1,11 +1,13 @@
-
-variable "project" {}
+variable "project" {
+    default = "sheriff-woody"
+}
 
 #
 # files
 #
 
 variable "file-account" {
+    default = "files/sheriff-woody.json"
 }
 
 variable "file-ca-chain-cert" {
@@ -13,11 +15,19 @@ variable "file-ca-chain-cert" {
 }
 
 variable "file-etcd-server-key" {
-    default = "files/etcd-server.key.pem"
+    default = "files/etcd.server.key.pem"
 }
 
 variable "file-etcd-server-cert" {
-    default = "files/etcd-server.cert.pem"
+    default = "files/etcd.server.cert.pem"
+}
+
+variable "file-etcd-client-key" {
+    default = "files/etcd.client.key.pem"
+}
+
+variable "file-etcd-client-cert" {
+    default = "files/etcd.client.cert.pem"
 }
 
 variable "file-etcd-ssh-pub-key" {
@@ -39,15 +49,11 @@ variable "etcd-network-ipv4-range" {
 }
 
 variable "etcd-name-prefix" {
-    default = "etcd-production"
+    default = "prod-etcd"
 }
 
 variable "etcd-ipv4-prefix" {
     default = "10.1.0."
-}
-
-variable "etcd-ipv4-offset" {
-    default = 10
 }
 
 variable "etcd-node-zones" {
@@ -56,6 +62,10 @@ variable "etcd-node-zones" {
         "1" = "us-central1-b"
         "2" = "us-central1-c"
     }
+}
+
+variable "etcd-tags" {
+    default = "role=etcd,environment=production"
 }
 
 variable "machine_type" {

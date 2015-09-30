@@ -10,7 +10,7 @@ resource "google_compute_network" "etcd-network" {
 }
 
 resource "google_compute_firewall" "etcd-allow-ssh-from-anywhere" {
-    name          = "etcd-allow-ssh-from-gce-developer-console"
+    name          = "etcd-allow-ssh-from-anywhere"
     network       = "${google_compute_network.etcd-network.name}"
     source_ranges = [ "0.0.0.0/0" ]
 
@@ -20,10 +20,10 @@ resource "google_compute_firewall" "etcd-allow-ssh-from-anywhere" {
     }
 }
 
-resource "google_compute_firewall" "etcd-allow-internal" {
-    name          = "etcd-allow-internal"
+resource "google_compute_firewall" "etcd-allow-client-from-anywhere" {
+    name          = "etcd-allow-client-from-anywhere"
     network       = "${google_compute_network.etcd-network.name}"
-    source_ranges = [ "10.0.0.0/8" ]
+    source_ranges = [ "0.0.0.0/0" ]
 
     allow {
         protocol = "icmp"
@@ -31,12 +31,18 @@ resource "google_compute_firewall" "etcd-allow-internal" {
 
     allow {
         protocol = "tcp"
-        ports = [ "1-65535" ]
+        ports = [ "2379" ]
     }
+}
+
+resource "google_compute_firewall" "etcd-allow-peers-internal" {
+    name          = "etcd-allow-peers-internal"
+    network       = "${google_compute_network.etcd-network.name}"
+    source_ranges = [ "10.0.0.0/8" ]
 
     allow {
-        protocol = "udp"
-        ports = [ "1-65535" ]
+        protocol = "tcp"
+        ports = [ "2380" ]
     }
 }
 
@@ -48,10 +54,11 @@ resource "template_file" "etcd-userdata" {
         # parameters
         #
 
-        me           = "${format("%s-%d=%s%d", var.etcd-name-prefix, count.index, var.etcd-ipv4-prefix, var.etcd-ipv4-offset+count.index)}"
+        me             = "${format("%s-%d=%s%d", var.etcd-name-prefix, count.index, var.etcd-ipv4-prefix, count.index)}"
         # "%s1%s" is a little hack until https://github.com/hashicorp/terraform/issues/3306 gets fixed
-        members      = "${join(",", formatlist("%s-%s=%s1%s", var.etcd-name-prefix, keys(var.etcd-node-zones), var.etcd-ipv4-prefix, keys(var.etcd-node-zones)))}"
-        private_ipv4 = "${format("%s%d", var.etcd-ipv4-prefix, var.etcd-ipv4-offset+count.index)}"
+        members        = "${join(",", formatlist("%s-%s=%s%s", var.etcd-name-prefix, keys(var.etcd-node-zones), var.etcd-ipv4-prefix, keys(var.etcd-node-zones)))}"
+        private_ipv4   = "${format("%s%d", var.etcd-ipv4-prefix, count.index)}"
+        fleet-metadata = "${var.etcd-tags}"
  
         #
         # files
@@ -60,6 +67,8 @@ resource "template_file" "etcd-userdata" {
         ca-chain-cert    = "${base64enc(file(var.file-ca-chain-cert))}"
         etcd-server-key  = "${base64enc(file(var.file-etcd-server-key))}"
         etcd-server-cert = "${base64enc(file(var.file-etcd-server-cert))}"
+        etcd-client-key  = "${base64enc(file(var.file-etcd-client-key))}"
+        etcd-client-cert = "${base64enc(file(var.file-etcd-client-cert))}"
     }
 }
 
@@ -76,7 +85,7 @@ resource "google_compute_instance" "etcd-nodes" {
     machine_type   = "${var.machine_type}"
     zone           = "${lookup(var.etcd-node-zones, count.index)}"
     can_ip_forward = true
-    tags           = [ "etcd" ]
+    tags           = [ "${split(",", replace(format("%s", var.etcd-tags), "/[^,]+=/", ""))}" ]
     count          = "${length(keys(var.etcd-node-zones))}"
 
     disk {
@@ -105,17 +114,17 @@ resource "google_compute_instance" "etcd-nodes" {
 
     depends_on = [
         "google_compute_disk.etcd-pds",
-        # "google_compute_target_pool.etcd-pool"
+        "google_compute_target_pool.etcd-pool"
     ]
 }
 
 resource "google_compute_route" "ip-10-1-0-n" {
-    name                   = "${format("ip-%s%d", replace(var.etcd-ipv4-prefix, ".", "-"), var.etcd-ipv4-offset+count.index)}"
+    name                   = "${format("ip-%s%d", replace(var.etcd-ipv4-prefix, ".", "-"), count.index)}"
     network                = "${google_compute_network.etcd-network.name}"
     next_hop_instance      = "${var.etcd-name-prefix}-${count.index}"
     next_hop_instance_zone = "${lookup(var.etcd-node-zones, count.index)}"
     priority               = 1000
-    dest_range             = "${format("%s%d", var.etcd-ipv4-prefix, var.etcd-ipv4-offset+count.index)}/32"
+    dest_range             = "${format("%s%d", var.etcd-ipv4-prefix, count.index)}/32"
     count                  = "${length(keys(var.etcd-node-zones))}"
 
     depends_on = [
@@ -123,21 +132,10 @@ resource "google_compute_route" "ip-10-1-0-n" {
     ]
 }
 
-## until etcd2 supports authentication or gce supports an internal load balancer
-/*
-resource "google_compute_http_health_check" "etcd-client-port-check" {
-    name               = "etcd-client-port-check"
-    port               = 2379
-    request_path       = "/v2/keys"
-    check_interval_sec = 5
-    timeout_sec        = 5
-}
-
 resource "google_compute_target_pool" "etcd-pool" {
     name          = "etcd-pool"
     # WARNING, keys(x) & values(x) should be in lexicographical order!!!
     instances     = [ "${formatlist("%s/%s-%s", values(var.etcd-node-zones), var.etcd-name-prefix, keys(var.etcd-node-zones))}" ]
-    health_checks = [ "${google_compute_http_health_check.etcd-client-port-check.name}" ]
 }
 
 resource "google_compute_address" "etcd-lb" {
@@ -147,7 +145,6 @@ resource "google_compute_address" "etcd-lb" {
 resource "google_compute_forwarding_rule" "etcd-rule" {
     name       = "etcd-rule"
     ip_address = "${google_compute_address.etcd-lb.address}"
-    port_range = "2379-2380"
+    port_range = "2379"
     target     = "${google_compute_target_pool.etcd-pool.self_link}"
 }
-*/

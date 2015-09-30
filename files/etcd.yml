@@ -7,15 +7,22 @@ coreos:
     reboot-strategy: off
 
   etcd2:
-    data-dir: /var/lib/etcd2
-    advertise-client-urls: https://${private_ipv4}:2379
-    initial-advertise-peer-urls: http://${private_ipv4}:2380
-    listen-client-urls: https://0.0.0.0:2379
-    listen-peer-urls: http://${private_ipv4}:2380
-    client-cert-auth: true,
+    data-dir: "/var/lib/etcd2"
+    advertise-client-urls: "https://${private_ipv4}:2379"
+    initial-advertise-peer-urls: "http://${private_ipv4}:2380"
+    listen-client-urls: "https://0.0.0.0:2379"
+    listen-peer-urls: "http://${private_ipv4}:2380"
+    client-cert-auth: true
     trusted-ca-file: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
     key-file: "/etc/ssl/etcd/private/etcd-server.key.pem"
     cert-file: "/etc/ssl/etcd/certs/etcd-server.cert.pem"
+
+  fleet:
+    metadata: "${fleet-metadata}"
+    etcd_servers: "https://127.0.0.1:2379"
+    etcd_cafile: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
+    etcd_keyfile: "/etc/ssl/etcd/private/etcd-client.key.pem"
+    etcd_certfile: "/etc/ssl/etcd/certs/etcd-client.cert.pem"
 
   units:
     - name: 00-ens4v1.network
@@ -111,13 +118,13 @@ coreos:
 
 write_files:
   - path: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
-    permissions: "0600"
+    permissions: "0644"
     owner: "etcd"
     encoding: "base64"
     content: |
       ${ca-chain-cert}
   - path: "/etc/ssl/etcd/certs/etcd-server.cert.pem"
-    permissions: "0600"
+    permissions: "0644"
     owner: "etcd"
     encoding: "base64"
     content: |
@@ -128,3 +135,23 @@ write_files:
     encoding: "base64"
     content: |
       ${etcd-server-key}
+  - path: "/etc/ssl/etcd/certs/etcd-client.cert.pem"
+    permissions: "0644"
+    encoding: "base64"
+    content: |
+      ${etcd-client-cert}
+  - path: "/etc/ssl/etcd/private/etcd-client.key.pem"
+    permissions: "0644"
+    encoding: "base64"
+    content: |
+      ${etcd-client-key}
+  - path: "/etc/profile.d/etcdctl-config.sh"
+    permissions: "0644"
+    content: |
+      #!/bin/sh
+      export ETCDCTL_PEERS="https://127.0.0.1:2379"
+      export ETCDCTL_CA_FILE="/etc/ssl/etcd/certs/ca-chain.cert.pem"
+      export ETCDCTL_CERT_FILE="/etc/ssl/etcd/certs/etcd-client.cert.pem"
+      export ETCDCTL_KEY_FILE="/etc/ssl/etcd/private/etcd-client.key.pem"
+      alias etcdctl="etcdctl --no-sync"
+
