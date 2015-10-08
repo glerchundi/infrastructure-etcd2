@@ -10,24 +10,24 @@ variable "file-account" {
     default = "files/sheriff-woody.json"
 }
 
-variable "file-ca-chain-cert" {
-    default = "files/ca-chain.cert.pem"
+variable "file-ca-cert" {
+    default = "files/ca.pem"
+}
+
+variable "file-etcd-server-cert" {
+    default = "files/etcd.server.pem"
 }
 
 variable "file-etcd-server-key" {
     default = "files/etcd.server.key.pem"
 }
 
-variable "file-etcd-server-cert" {
-    default = "files/etcd.server.cert.pem"
+variable "file-etcd-client-cert" {
+    default = "files/etcd.client.pem"
 }
 
 variable "file-etcd-client-key" {
     default = "files/etcd.client.key.pem"
-}
-
-variable "file-etcd-client-cert" {
-    default = "files/etcd.client.cert.pem"
 }
 
 variable "file-etcd-ssh-pub-key" {
@@ -49,7 +49,7 @@ variable "etcd-network-ipv4-range" {
 }
 
 variable "etcd-name-prefix" {
-    default = "prod-etcd"
+    default = "etcd"
 }
 
 variable "etcd-ipv4-prefix" {
@@ -72,9 +72,14 @@ variable "machine_type" {
     default = "n1-standard-1"
 }
 
-# coreos-alpha-801-0-0-v20150910
-# coreos-beta-766-3-0-v20150902
-# coreos-stable-766-3-0-v20150908
-variable "image" {
-	default = "coreos-alpha-801-0-0-v20150910"
+variable "coreos-image" {
+    default = "coreos-alpha-801-0-0-v20150910"
+}
+
+variable "coreos-update-group" {
+    default = "stable"
+}
+
+variable "coreos-update-server" {
+    default = "https://public.update.core-os.net/v1/update/"
 }

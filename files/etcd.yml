@@ -3,26 +3,35 @@
 coreos:
 
   update:
-    group: stable
+    group: ${update-group}
+    server: ${update-server}
     reboot-strategy: off
 
   etcd2:
-    data-dir: "/var/lib/etcd2"
-    advertise-client-urls: "https://${private_ipv4}:2379"
-    initial-advertise-peer-urls: "http://${private_ipv4}:2380"
-    listen-client-urls: "https://0.0.0.0:2379"
-    listen-peer-urls: "http://${private_ipv4}:2380"
+    data-dir: /var/lib/etcd2
+    advertise-client-urls: https://${private_ipv4}:2379
+    initial-advertise-peer-urls: http://${private_ipv4}:2380
+    listen-client-urls: https://0.0.0.0:2379
+    listen-peer-urls: http://${private_ipv4}:2380
     client-cert-auth: true
-    trusted-ca-file: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
-    key-file: "/etc/ssl/etcd/private/etcd-server.key.pem"
-    cert-file: "/etc/ssl/etcd/certs/etcd-server.cert.pem"
+    trusted-ca-file: ${ca-cert-file}
+    cert-file: ${etcd-server-cert-file}
+    key-file: ${etcd-server-key-file}
 
   fleet:
-    metadata: "${fleet-metadata}"
-    etcd_servers: "https://127.0.0.1:2379"
-    etcd_cafile: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
-    etcd_keyfile: "/etc/ssl/etcd/private/etcd-client.key.pem"
-    etcd_certfile: "/etc/ssl/etcd/certs/etcd-client.cert.pem"
+    metadata: ${fleet-metadata}
+    # https://github.com/coreos/flannel/issues/334
+    etcd_key_prefix: /coreos.com/fleet/
+    etcd_servers: https://127.0.0.1:2379
+    etcd_cafile: ${ca-cert-file}
+    etcd_certfile: ${etcd-client-cert-file}
+    etcd_keyfile: ${etcd-client-key-file}
+
+  locksmithd:
+    endpoint: https://127.0.0.1:2379
+    etcd-cafile: ${ca-cert-file}
+    etcd-certfile: ${etcd-client-cert-file}
+    etcd-keyfile: ${etcd-client-key-file}
 
   units:
     - name: 00-ens4v1.network
@@ -77,7 +86,7 @@ coreos:
         [Service]
         Type=oneshot
         RemainAfterExit=yes
-        Environment=VERSION=0.1.4
+        Environment=VERSION=0.2.0
         ExecStart=/usr/bin/mkdir -p /opt/bin
         ExecStart=/usr/bin/curl --fail -L \
         -o /opt/bin/etcd2-bootstrapper -z /opt/bin/etcd2-bootstrapper \
@@ -98,6 +107,10 @@ coreos:
         ExecStart=/opt/bin/etcd2-bootstrapper \
         --me ${me} \
         --members ${members} \
+        --tmpl-listen-url="https://{{.}}:2379" \
+        --cert-file="${etcd-client-cert-file}" \
+        --key-file="${etcd-client-key-file}" \
+        --ca-file="${ca-cert-file}" \
         --force \
         --out /etc/etcd2-initial-cluster.env
 
@@ -117,41 +130,41 @@ coreos:
       command: start
 
 write_files:
-  - path: "/etc/ssl/etcd/certs/ca-chain.cert.pem"
+  - path: "${ca-cert-file}"
     permissions: "0644"
     owner: "etcd"
-    encoding: "base64"
+    encoding: "gzip+base64"
     content: |
-      ${ca-chain-cert}
-  - path: "/etc/ssl/etcd/certs/etcd-server.cert.pem"
+      ${ca-cert}
+  - path: "${etcd-server-cert-file}"
     permissions: "0644"
     owner: "etcd"
-    encoding: "base64"
+    encoding: "gzip+base64"
     content: |
       ${etcd-server-cert}
-  - path: "/etc/ssl/etcd/private/etcd-server.key.pem"
+  - path: "${etcd-server-key-file}"
     permissions: "0600"
     owner: "etcd"
-    encoding: "base64"
+    encoding: "gzip+base64"
     content: |
       ${etcd-server-key}
-  - path: "/etc/ssl/etcd/certs/etcd-client.cert.pem"
+  - path: "${etcd-client-cert-file}"
     permissions: "0644"
-    encoding: "base64"
+    encoding: "gzip+base64"
     content: |
       ${etcd-client-cert}
-  - path: "/etc/ssl/etcd/private/etcd-client.key.pem"
+  - path: "${etcd-client-key-file}"
     permissions: "0644"
-    encoding: "base64"
+    encoding: "gzip+base64"
     content: |
       ${etcd-client-key}
   - path: "/etc/profile.d/etcdctl-config.sh"
     permissions: "0644"
     content: |
       #!/bin/sh
-      export ETCDCTL_PEERS="https://127.0.0.1:2379"
-      export ETCDCTL_CA_FILE="/etc/ssl/etcd/certs/ca-chain.cert.pem"
-      export ETCDCTL_CERT_FILE="/etc/ssl/etcd/certs/etcd-client.cert.pem"
-      export ETCDCTL_KEY_FILE="/etc/ssl/etcd/private/etcd-client.key.pem"
+      export ETCDCTL_PEERS=https://127.0.0.1:2379
+      export ETCDCTL_CA_FILE=${ca-cert-file}
+      export ETCDCTL_CERT_FILE=${etcd-client-cert-file}
+      export ETCDCTL_KEY_FILE=${etcd-client-key-file}
       alias etcdctl="etcdctl --no-sync"
 

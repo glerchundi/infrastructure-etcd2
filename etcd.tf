@@ -35,14 +35,14 @@ resource "google_compute_firewall" "etcd-allow-client-from-anywhere" {
     }
 }
 
-resource "google_compute_firewall" "etcd-allow-peers-internal" {
+resource "google_compute_firewall" "etcd-allow-internal" {
     name          = "etcd-allow-peers-internal"
     network       = "${google_compute_network.etcd-network.name}"
     source_ranges = [ "10.0.0.0/8" ]
 
     allow {
         protocol = "tcp"
-        ports = [ "2380" ]
+        ports = [ "2379-2380" ]
     }
 }
 
@@ -59,16 +59,23 @@ resource "template_file" "etcd-userdata" {
         members        = "${join(",", formatlist("%s-%s=%s%s", var.etcd-name-prefix, keys(var.etcd-node-zones), var.etcd-ipv4-prefix, keys(var.etcd-node-zones)))}"
         private_ipv4   = "${format("%s%d", var.etcd-ipv4-prefix, count.index)}"
         fleet-metadata = "${var.etcd-tags}"
+        update-group   = "${var.coreos-update-group}"
+        update-server  = "${var.coreos-update-server}"
  
         #
         # files
         #
 
-        ca-chain-cert    = "${base64enc(file(var.file-ca-chain-cert))}"
-        etcd-server-key  = "${base64enc(file(var.file-etcd-server-key))}"
-        etcd-server-cert = "${base64enc(file(var.file-etcd-server-cert))}"
-        etcd-client-key  = "${base64enc(file(var.file-etcd-client-key))}"
-        etcd-client-cert = "${base64enc(file(var.file-etcd-client-cert))}"
+        ca-cert-file          = "/etc/ssl/etcd/ca.pem"
+        ca-cert               = "${base64enc(gzip(file(var.file-ca-cert)))}"
+        etcd-server-cert-file = "/etc/ssl/etcd/etcd.server.pem"
+        etcd-server-cert      = "${base64enc(gzip(file(var.file-etcd-server-cert)))}"
+        etcd-server-key-file  = "/etc/ssl/etcd/etcd.server.key.pem"
+        etcd-server-key       = "${base64enc(gzip(file(var.file-etcd-server-key)))}"
+        etcd-client-cert-file = "/etc/ssl/etcd/etcd.client.pem"
+        etcd-client-cert      = "${base64enc(gzip(file(var.file-etcd-client-cert)))}"
+        etcd-client-key-file  = "/etc/ssl/etcd/etcd.client.key.pem"
+        etcd-client-key       = "${base64enc(gzip(file(var.file-etcd-client-key)))}"
     }
 }
 
@@ -89,7 +96,7 @@ resource "google_compute_instance" "etcd-nodes" {
     count          = "${length(keys(var.etcd-node-zones))}"
 
     disk {
-        image       = "${var.image}"
+        image       = "${var.coreos-image}"
         type        = "pd-ssd"
         size        = 200
         auto_delete = true
